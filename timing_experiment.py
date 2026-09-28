@@ -17,15 +17,20 @@ DATASET = "data/network_elements.csv"
 RESULT_FILE = "results/timing_results.csv"
 SUMMARY_FILE = "results/timing_summary.csv"
 
-SEEDS = range(1, 11)
-CACHE_CAPACITIES = [3, 5, 7, 10]
+# SEEDS = range(1, 11)
+# CACHE_CAPACITIES = [3, 5, 7, 10]
+
+## Testing values for development
+SEEDS = range(1, 2)
+CACHE_CAPACITIES = [3]
+REPETITIONS = 3
 
 CACHE_STRATEGIES = [
     FIFOCache,
     LRUCache,
 ]
 
-REPETITIONS = 30
+# REPETITIONS = 30
 
 # 1.239 s / 100
 EXTERNAL_REQUEST_DELAY = 0.01239
