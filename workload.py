@@ -283,3 +283,27 @@ class WorkloadGenerator:
                     f"Stable workload must contain exactly 30 hot requests, "
                     f"but contains {hot_requests}."
                 )
+
+        # Verify changing locality
+        if workload.workload_type == WorkloadType.CHANGING_LOCALITY:
+            phase_1 = workload.requests[10:30]
+            phase_2 = workload.requests[30:50]
+
+            hot_set_1 = set(workload.hot_sets[0])
+            hot_set_2 = set(workload.hot_sets[1])
+
+            phase_1_hot = sum(
+                ne in hot_set_1
+                for ne in phase_1
+            )
+
+            phase_2_hot = sum(
+                ne in hot_set_2
+                for ne in phase_2
+            )
+
+            if phase_1_hot != 12 or phase_2_hot != 12:
+                raise ValueError(
+                    "Changing-locality workload must contain exactly "
+                    "12 hot requests in each phase."
+                )
