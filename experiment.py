@@ -6,6 +6,7 @@ from workload import WorkloadGenerator, WorkloadType
 DATASET = "data/network_elements.csv"
 
 SEED = 1
+# Capacity of 3 for testing.
 CACHE_CAPACITY = 3
 WORKLOAD_TYPE = WorkloadType.STABLE_LOCALITY
 
