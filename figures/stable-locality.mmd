@@ -1,0 +1,5 @@
+flowchart LR
+    Start["Start workload"] --> Init["Initial NE accesses"]
+    Init --> Phase["Remaining requests"]
+    Phase --> Hot["~60%: fixed hot set"]
+    Phase --> Other["~40%: other NEs"]

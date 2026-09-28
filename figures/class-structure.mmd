@@ -1,0 +1,45 @@
+classDiagram
+    class SimulatedBackend {
+        +network_elements
+        +request_count
+        +get(...)
+    }
+
+    class FIFOCache {
+        +capacity
+        +statistics
+        +get(ne_name)
+    }
+
+    class LRUCache {
+        +capacity
+        +statistics
+        +get(ne_name)
+    }
+
+    class CacheStatistics {
+        +hits
+        +misses
+    }
+
+    class WorkloadGenerator {
+        +generate(network_elements, workload_type, seed)
+    }
+
+    class Workload {
+        +requests
+        +hot_sets
+    }
+
+    class WorkloadType {
+        <<enumeration>>
+        STABLE_LOCALITY
+        CHANGING_LOCALITY
+    }
+
+    FIFOCache --> SimulatedBackend : requests misses
+    LRUCache --> SimulatedBackend : requests misses
+    FIFOCache --> CacheStatistics
+    LRUCache --> CacheStatistics
+    WorkloadGenerator --> Workload : creates
+    WorkloadGenerator --> WorkloadType : uses

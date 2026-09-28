@@ -1,0 +1,5 @@
+flowchart LR
+    A["Least recently used"] --> B["Entry"]
+    B --> C["Most recently used"]
+    A -. "evicted when full" .-> X["removed"]
+    H["Cache hit"] -. "move to most-recent position" .-> C

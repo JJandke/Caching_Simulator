@@ -1,0 +1,6 @@
+flowchart LR
+    Start["Start workload"] --> Init["Initial NE accesses"]
+    Init --> P1["Phase 1"]
+    P1 --> H1["Hot set A"]
+    H1 --> P2["Phase 2"]
+    P2 --> H2["Hot set B"]

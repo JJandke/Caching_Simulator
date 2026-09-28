@@ -1,0 +1,5 @@
+flowchart LR
+    A["Oldest entry"] --> B["Entry"]
+    B --> C["Newest entry"]
+    D["New entry"] --> C
+    A -. "evicted when full" .-> X["removed"]

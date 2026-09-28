@@ -1,0 +1,12 @@
+flowchart LR
+    CSV["network_elements.csv"] --> Backend["SimulatedBackend"]
+    Generator["WorkloadGenerator"] --> Workload["Generated Workload"]
+    Workload --> Experiment["Experiment Runner"]
+
+    Experiment --> FIFO["FIFOCache"]
+    Experiment --> LRU["LRUCache"]
+
+    FIFO --> Backend
+    LRU --> Backend
+
+    Experiment --> Results["CSV Results"]
