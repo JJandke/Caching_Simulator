@@ -6,23 +6,59 @@ from workload import WorkloadGenerator, WorkloadType
 DATASET = "data/network_elements.csv"
 
 SEED = 1
-# Capacity of 3 for testing.
-CACHE_CAPACITY = 3
+CACHE_CAPACITIES = [3, 5, 7, 10]
 WORKLOAD_TYPE = WorkloadType.STABLE_LOCALITY
 
 
-def run_cache(cache, workload):
+def run_experiment(
+    workload,
+    cache_class,
+    capacity: int,
+) -> dict:
     """
-    Executes all requests of one workload using the given cache.
+    Executes one workload using one cache strategy and capacity.
+
+    Returns the resulting cache statistics.
     """
 
+    backend = SimulatedBackend(
+        DATASET,
+        request_delay=0,
+    )
+
+    cache = cache_class(
+        capacity=capacity,
+        backend=backend,
+    )
+
+    # Execute workload
     for ne_name in workload.requests:
         cache.get(ne_name)
+
+    # Validate experiment results
+    assert (
+        cache.statistics.hits + cache.statistics.misses
+        == len(workload.requests)
+    )
+
+    assert (
+        cache.statistics.misses
+        == backend.request_count
+    )
+
+    return {
+        "strategy": cache_class.__name__,
+        "capacity": capacity,
+        "hits": cache.statistics.hits,
+        "misses": cache.statistics.misses,
+        "hit_rate": cache.statistics.hit_rate,
+        "external_requests": backend.request_count,
+    }
 
 
 def main():
     # ---------------------------------------------------------
-    # Generate workload
+    # Generate one fixed workload
     # ---------------------------------------------------------
 
     workload_backend = SimulatedBackend(
@@ -39,95 +75,71 @@ def main():
     )
 
     # ---------------------------------------------------------
-    # FIFO
+    # Run experiments
     # ---------------------------------------------------------
 
-    fifo_backend = SimulatedBackend(
-        DATASET,
-        # TODO: Enable sleep for actual testing. Just disabled for debugging as of now.
-        request_delay=0,
-    )
+    results = []
 
-    fifo = FIFOCache(
-        capacity=CACHE_CAPACITY,
-        backend=fifo_backend,
-    )
+    for capacity in CACHE_CAPACITIES:
 
-    run_cache(fifo, workload)
+        fifo_result = run_experiment(
+            workload=workload,
+            cache_class=FIFOCache,
+            capacity=capacity,
+        )
 
-    # ---------------------------------------------------------
-    # LRU
-    # ---------------------------------------------------------
+        lru_result = run_experiment(
+            workload=workload,
+            cache_class=LRUCache,
+            capacity=capacity,
+        )
 
-    lru_backend = SimulatedBackend(
-        DATASET,
-        request_delay=0,
-    )
-
-    lru = LRUCache(
-        capacity=CACHE_CAPACITY,
-        backend=lru_backend,
-    )
-
-    run_cache(lru, workload)
-
-
-    # Check if #hits + #misses = #requests to ensure proper functionality of the code.
-    assert (
-            fifo.statistics.hits + fifo.statistics.misses
-            == len(workload.requests)
-    )
-
-    assert (
-            lru.statistics.hits + lru.statistics.misses
-            == len(workload.requests)
-    )
-
-    assert (
-            fifo.statistics.misses
-            == fifo_backend.request_count
-    )
-
-    assert (
-            lru.statistics.misses
-            == lru_backend.request_count
-    )
+        results.append(fifo_result)
+        results.append(lru_result)
 
     # ---------------------------------------------------------
-    # Results
+    # Print configuration
     # ---------------------------------------------------------
 
-    print("=" * 60)
+    print("=" * 76)
     print("Experiment configuration")
-    print("=" * 60)
+    print("=" * 76)
 
     print(f"Workload type:  {workload.workload_type.value}")
     print(f"Seed:           {workload.seed}")
-    print(f"Cache capacity: {CACHE_CAPACITY}")
     print(f"Requests:       {len(workload.requests)}")
     print(f"Working set:    {len(workload.working_set)} NEs")
+    print(f"Cache sizes:    {CACHE_CAPACITIES}")
+
+    # ---------------------------------------------------------
+    # Print results
+    # ---------------------------------------------------------
 
     print()
+    print("=" * 76)
+    print("Results")
+    print("=" * 76)
 
-    print("=" * 60)
-    print("FIFO")
-    print("=" * 60)
+    print(
+        f"{'Capacity':<10}"
+        f"{'Strategy':<12}"
+        f"{'Hits':<8}"
+        f"{'Misses':<10}"
+        f"{'Hit Rate':<12}"
+        f"{'External':<10}"
+    )
 
-    print(f"Hits:              {fifo.statistics.hits}")
-    print(f"Misses:            {fifo.statistics.misses}")
-    print(f"Hit rate:          {fifo.statistics.hit_rate:.2%}")
-    print(f"External requests: {fifo_backend.request_count}")
+    print("-" * 76)
 
-    print()
-
-    print("=" * 60)
-    print("LRU")
-    print("=" * 60)
-
-    print(f"Hits:              {lru.statistics.hits}")
-    print(f"Misses:            {lru.statistics.misses}")
-    print(f"Hit rate:          {lru.statistics.hit_rate:.2%}")
-    print(f"External requests: {lru_backend.request_count}")
+    for result in results:
+        print(
+            f"{result['capacity']:<10}"
+            f"{result['strategy']:<12}"
+            f"{result['hits']:<8}"
+            f"{result['misses']:<10}"
+            f"{result['hit_rate']:<12.2%}"
+            f"{result['external_requests']:<10}"
+        )
 
 
 if __name__ == "__main__":
