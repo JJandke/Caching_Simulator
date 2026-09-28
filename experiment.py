@@ -1,6 +1,7 @@
 import csv
 from pathlib import Path
 
+from statistics import mean, stdev
 from backend import SimulatedBackend
 from caches import FIFOCache, LRUCache
 from workload import WorkloadGenerator, WorkloadType
@@ -203,6 +204,113 @@ def print_summary(results: list[dict]) -> None:
                     f"{mean_hit_rate:<12.2%}"
                     f"{mean_external:<10.2f}"
                 )
+
+def print_strategy_comparison(results: list[dict]) -> None:
+    """
+    Compares FIFO and LRU across seeds.
+
+    For each workload type and cache capacity, the function reports:
+        - mean hit rate for FIFO and LRU
+        - sample standard deviation of the hit rates
+        - mean paired LRU-FIFO difference
+        - number of seeds for which LRU was better, equal, or worse
+    """
+
+    print()
+    print("=" * 110)
+    print("FIFO vs. LRU comparison across seeds")
+    print("=" * 110)
+
+    print(
+        f"{'Workload':<20}"
+        f"{'Capacity':<10}"
+        f"{'FIFO Mean':<12}"
+        f"{'FIFO SD':<12}"
+        f"{'LRU Mean':<12}"
+        f"{'LRU SD':<12}"
+        f"{'Mean Δ':<12}"
+        f"{'LRU >':<8}"
+        f"{'Equal':<8}"
+        f"{'FIFO >':<8}"
+    )
+
+    print("-" * 110)
+
+    for workload_type in WorkloadType:
+
+        for capacity in CACHE_CAPACITIES:
+
+            fifo_by_seed = {}
+            lru_by_seed = {}
+
+            for result in results:
+
+                if (
+                    result["workload_type"] == workload_type.value
+                    and result["capacity"] == capacity
+                ):
+
+                    if result["strategy"] == FIFOCache.__name__:
+                        fifo_by_seed[result["seed"]] = result["hit_rate"]
+
+                    elif result["strategy"] == LRUCache.__name__:
+                        lru_by_seed[result["seed"]] = result["hit_rate"]
+
+            # Both strategies must have exactly the same seeds.
+            assert fifo_by_seed.keys() == lru_by_seed.keys()
+
+            seeds = sorted(fifo_by_seed.keys())
+
+            fifo_rates = [
+                fifo_by_seed[seed]
+                for seed in seeds
+            ]
+
+            lru_rates = [
+                lru_by_seed[seed]
+                for seed in seeds
+            ]
+
+            differences = [
+                lru_by_seed[seed] - fifo_by_seed[seed]
+                for seed in seeds
+            ]
+
+            lru_better = sum(
+                difference > 0
+                for difference in differences
+            )
+
+            equal = sum(
+                difference == 0
+                for difference in differences
+            )
+
+            fifo_better = sum(
+                difference < 0
+                for difference in differences
+            )
+
+            fifo_mean = mean(fifo_rates)
+            lru_mean = mean(lru_rates)
+
+            fifo_sd = stdev(fifo_rates)
+            lru_sd = stdev(lru_rates)
+
+            mean_difference = mean(differences)
+
+            print(
+                f"{workload_type.value:<20}"
+                f"{capacity:<10}"
+                f"{fifo_mean:<12.2%}"
+                f"{fifo_sd:<12.2%}"
+                f"{lru_mean:<12.2%}"
+                f"{lru_sd:<12.2%}"
+                f"{mean_difference * 100:<+12.2f}"
+                f"{lru_better:<8}"
+                f"{equal:<8}"
+                f"{fifo_better:<8}"
+            )
 
 
 def main():
