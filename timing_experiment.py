@@ -17,15 +17,15 @@ DATASET = "data/network_elements.csv"
 RESULT_FILE = "results/timing_results.csv"
 SUMMARY_FILE = "results/timing_summary.csv"
 
-# Final experiment values:
-# SEEDS = range(1, 11)
-# CACHE_CAPACITIES = [3, 5, 7, 10]
-# REPETITIONS = 30
+## Final experiment values:
+SEEDS = range(1, 11)
+CACHE_CAPACITIES = [3, 5, 7, 10]
+REPETITIONS = 30
 
-# Development/test values:
-SEEDS = range(1, 2)
-CACHE_CAPACITIES = [3]
-REPETITIONS = 3
+## Development/test values:
+#SEEDS = range(1, 2)
+#CACHE_CAPACITIES = [3]
+#REPETITIONS = 3
 
 # Cache-only timing executes the complete workload repeatedly inside
 # one timed block to reduce relative timer and scheduling noise.
@@ -190,12 +190,17 @@ def create_summary(
     results: list[dict],
 ) -> list[dict]:
     """
-    Development summary.
+    Creates the final timing summary using two-stage aggregation.
 
-    This currently summarizes all timing observations directly.
-    Before the final experiment analysis, this will be replaced by
-    two-stage aggregation:
-        repetitions -> mean per seed -> overall mean/SD across seeds.
+    Stage 1:
+        Average all timing repetitions for each individual seed.
+
+    Stage 2:
+        Calculate the overall mean and standard deviation across
+        the resulting seed means.
+
+    This prevents repeated measurements of the same workload from
+    being treated as independent workloads.
     """
 
     summary = []
@@ -208,36 +213,65 @@ def create_summary(
 
                 for cache_class in CACHE_STRATEGIES:
 
-                    matching = [
-                        result
-                        for result in results
-                        if (
-                            result["timing_mode"] == timing_mode
-                            and result["workload_type"]
-                            == workload_type.value
-                            and result["capacity"] == capacity
-                            and result["strategy"]
-                            == cache_class.__name__
-                        )
-                    ]
+                    # ---------------------------------------------
+                    # Stage 1: mean execution time for each seed
+                    # ---------------------------------------------
 
-                    times = [
-                        result["execution_time_s"]
-                        for result in matching
-                    ]
+                    seed_means = []
+
+                    for seed in SEEDS:
+
+                        matching = [
+                            result
+                            for result in results
+                            if (
+                                result["timing_mode"] == timing_mode
+                                and result["workload_type"]
+                                == workload_type.value
+                                and result["capacity"] == capacity
+                                and result["strategy"]
+                                == cache_class.__name__
+                                and result["seed"] == seed
+                            )
+                        ]
+
+                        assert len(matching) == REPETITIONS
+
+                        repetition_times = [
+                            result["execution_time_s"]
+                            for result in matching
+                        ]
+
+                        seed_means.append(
+                            mean(repetition_times)
+                        )
+
+                    # ---------------------------------------------
+                    # Stage 2: statistics across seed means
+                    # ---------------------------------------------
 
                     summary.append({
                         "timing_mode": timing_mode,
                         "workload_type": workload_type.value,
                         "capacity": capacity,
                         "strategy": cache_class.__name__,
-                        "runs": len(times),
-                        "mean_execution_time_s": mean(times),
-                        "sd_execution_time_s": (
-                            stdev(times) if len(times) > 1 else 0.0
-                        ),
-                        "min_execution_time_s": min(times),
-                        "max_execution_time_s": max(times),
+
+                        "seeds": len(seed_means),
+                        "repetitions_per_seed": REPETITIONS,
+
+                        "mean_execution_time_s":
+                            mean(seed_means),
+
+                        "sd_execution_time_s":
+                            stdev(seed_means)
+                            if len(seed_means) > 1
+                            else 0.0,
+
+                        "min_seed_mean_s":
+                            min(seed_means),
+
+                        "max_seed_mean_s":
+                            max(seed_means),
                     })
 
     return summary
@@ -249,6 +283,7 @@ def save_summary(
 ) -> None:
 
     output_path = Path(output_file)
+
     output_path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -259,11 +294,12 @@ def save_summary(
         "workload_type",
         "capacity",
         "strategy",
-        "runs",
+        "seeds",
+        "repetitions_per_seed",
         "mean_execution_time_s",
         "sd_execution_time_s",
-        "min_execution_time_s",
-        "max_execution_time_s",
+        "min_seed_mean_s",
+        "max_seed_mean_s",
     ]
 
     with output_path.open(
@@ -319,8 +355,8 @@ def print_summary(
                 f"{row['strategy']:<12}"
                 f"{row['mean_execution_time_s'] * 1000:<14.3f}"
                 f"{row['sd_execution_time_s'] * 1000:<14.3f}"
-                f"{row['min_execution_time_s'] * 1000:<14.3f}"
-                f"{row['max_execution_time_s'] * 1000:<14.3f}"
+                f"{row['min_seed_mean_s'] * 1000:<14.3f}"
+                f"{row['max_seed_mean_s'] * 1000:<14.3f}"
             )
 
 
