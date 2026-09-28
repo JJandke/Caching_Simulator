@@ -17,22 +17,26 @@ DATASET = "data/network_elements.csv"
 RESULT_FILE = "results/timing_results.csv"
 SUMMARY_FILE = "results/timing_summary.csv"
 
+# Final experiment values:
 # SEEDS = range(1, 11)
 # CACHE_CAPACITIES = [3, 5, 7, 10]
+# REPETITIONS = 30
 
-## Testing values for development
+# Development/test values:
 SEEDS = range(1, 2)
 CACHE_CAPACITIES = [3]
 REPETITIONS = 3
+
+# Cache-only timing executes the complete workload repeatedly inside
+# one timed block to reduce relative timer and scheduling noise.
+CACHE_ONLY_INNER_ITERATIONS = 1000
 
 CACHE_STRATEGIES = [
     FIFOCache,
     LRUCache,
 ]
 
-# REPETITIONS = 30
-
-# 1.239 s / 100
+# Measured SSH mean: 1.239 s; simulation uses a 1:100 scaling.
 EXTERNAL_REQUEST_DELAY = 0.01239
 
 TIMING_MODES = {
@@ -46,47 +50,98 @@ def run_timed_experiment(
     cache_class,
     capacity: int,
     request_delay: float,
+    timing_mode: str,
 ) -> dict:
     """
-    Executes one complete workload and measures its elapsed
-    wall-clock execution time.
+    Execute and time one workload configuration.
+
+    simulated_external:
+        Executes one complete workload with the configured artificial
+        external-request delay.
+
+    cache_only:
+        Executes the complete workload CACHE_ONLY_INNER_ITERATIONS times
+        without an artificial delay and reports the average time of one
+        workload. The backend is created before the timed section so CSV
+        loading is excluded from the measurement.
     """
 
-    backend = SimulatedBackend(
-        DATASET,
-        request_delay=request_delay,
-    )
+    if timing_mode == "cache_only":
 
-    cache = cache_class(
-        capacity=capacity,
-        backend=backend,
-    )
+        iterations = CACHE_ONLY_INNER_ITERATIONS
 
-    start = time.perf_counter()
+        # Load the dataset before timing so CSV loading is not measured.
+        backend = SimulatedBackend(
+            DATASET,
+            request_delay=0,
+        )
 
-    for ne_name in workload.requests:
-        cache.get(ne_name)
+        start = time.perf_counter()
 
-    end = time.perf_counter()
+        for _ in range(iterations):
 
-    elapsed_time = end - start
+            # Every workload execution starts with an empty cache.
+            cache = cache_class(
+                capacity=capacity,
+                backend=backend,
+            )
 
-    # Validate run
+            for ne_name in workload.requests:
+                cache.get(ne_name)
+
+        end = time.perf_counter()
+
+        # Average execution time of one complete workload.
+        elapsed_time = (end - start) / iterations
+
+        # The backend counter accumulates across all inner iterations.
+        assert backend.request_count == (
+            cache.statistics.misses * iterations
+        )
+
+    else:
+
+        iterations = 1
+
+        backend = SimulatedBackend(
+            DATASET,
+            request_delay=request_delay,
+        )
+
+        cache = cache_class(
+            capacity=capacity,
+            backend=backend,
+        )
+
+        start = time.perf_counter()
+
+        for ne_name in workload.requests:
+            cache.get(ne_name)
+
+        end = time.perf_counter()
+
+        elapsed_time = end - start
+
+        assert (
+            backend.request_count
+            == cache.statistics.misses
+        )
+
+    # General validation: one workload always contains the same number
+    # of requests, regardless of timing mode.
     assert (
-        cache.statistics.hits + cache.statistics.misses
+        cache.statistics.hits
+        + cache.statistics.misses
         == len(workload.requests)
-    )
-
-    assert (
-        cache.statistics.misses
-        == backend.request_count
     )
 
     return {
         "execution_time_s": elapsed_time,
         "hits": cache.statistics.hits,
         "misses": cache.statistics.misses,
-        "external_requests": backend.request_count,
+        # Store the per-workload number for both timing modes.
+        "external_requests": cache.statistics.misses,
+        "inner_iterations": iterations,
     }
 
 
@@ -109,6 +164,7 @@ def save_results(
         "strategy",
         "repetition",
         "request_delay_s",
+        "inner_iterations",
         "hits",
         "misses",
         "external_requests",
@@ -133,6 +189,14 @@ def save_results(
 def create_summary(
     results: list[dict],
 ) -> list[dict]:
+    """
+    Development summary.
+
+    This currently summarizes all timing observations directly.
+    Before the final experiment analysis, this will be replaced by
+    two-stage aggregation:
+        repetitions -> mean per seed -> overall mean/SD across seeds.
+    """
 
     summary = []
 
@@ -169,7 +233,9 @@ def create_summary(
                         "strategy": cache_class.__name__,
                         "runs": len(times),
                         "mean_execution_time_s": mean(times),
-                        "sd_execution_time_s": stdev(times),
+                        "sd_execution_time_s": (
+                            stdev(times) if len(times) > 1 else 0.0
+                        ),
                         "min_execution_time_s": min(times),
                         "max_execution_time_s": max(times),
                     })
@@ -300,7 +366,8 @@ def main():
 
             for seed in SEEDS:
 
-                # Generate workload once for this seed/type.
+                # Generate each workload once for this seed/type and reuse
+                # the exact request sequence for FIFO and LRU.
                 workload = generator.generate(
                     network_elements=dataset_backend.network_elements,
                     workload_type=workload_type,
@@ -309,15 +376,23 @@ def main():
 
                 for capacity in CACHE_CAPACITIES:
 
-                    for cache_class in CACHE_STRATEGIES:
+                    # Alternate which strategy is measured first to avoid
+                    # systematically favoring one strategy through run order.
+                    for repetition in range(1, REPETITIONS + 1):
 
-                        for repetition in range(1, REPETITIONS + 1):
+                        if repetition % 2 == 1:
+                            strategies = CACHE_STRATEGIES
+                        else:
+                            strategies = reversed(CACHE_STRATEGIES)
+
+                        for cache_class in strategies:
 
                             measurement = run_timed_experiment(
                                 workload=workload,
                                 cache_class=cache_class,
                                 capacity=capacity,
                                 request_delay=request_delay,
+                                timing_mode=timing_mode,
                             )
 
                             results.append({
@@ -344,6 +419,30 @@ def main():
     # ---------------------------------------------------------
 
     assert len(results) == total_runs
+
+    # For a given mode/workload/seed/capacity/strategy, logical cache
+    # results must remain identical across timing repetitions.
+    logical_results = {}
+
+    for result in results:
+        key = (
+            result["timing_mode"],
+            result["workload_type"],
+            result["seed"],
+            result["capacity"],
+            result["strategy"],
+        )
+
+        logical_value = (
+            result["hits"],
+            result["misses"],
+            result["external_requests"],
+        )
+
+        if key in logical_results:
+            assert logical_results[key] == logical_value
+        else:
+            logical_results[key] = logical_value
 
     # ---------------------------------------------------------
     # Save results
