@@ -268,3 +268,18 @@ class WorkloadGenerator:
             raise ValueError(
                 "Workload contains an NE outside its working set."
             )
+
+        # Verify stable locality
+        if workload.workload_type == WorkloadType.STABLE_LOCALITY:
+            hot_set = set(workload.hot_sets[0])
+
+            hot_requests = sum(
+                ne in hot_set
+                for ne in workload.requests
+            )
+
+            if hot_requests != 30:
+                raise ValueError(
+                    f"Stable workload must contain exactly 30 hot requests, "
+                    f"but contains {hot_requests}."
+                )
