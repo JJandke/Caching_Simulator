@@ -75,3 +75,7 @@ class SimulatedBackend:
     @property
     def size(self) -> int:
         return len(self._versions)
+
+    @property
+    def network_elements(self) -> list[str]:
+        return list(self._versions.keys())
