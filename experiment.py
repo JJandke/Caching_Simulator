@@ -43,6 +43,7 @@ def main():
 
     fifo_backend = SimulatedBackend(
         DATASET,
+        # TODO: Enable sleep for actual testing. Just disabled for debugging as of now.
         request_delay=0,
     )
 
