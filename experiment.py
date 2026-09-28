@@ -548,8 +548,7 @@ def main():
     print(f"Summary:      {SUMMARY_FILE}")
 
     print_summary(results)
-    print(print_strategy_comparison(results))
-
+    print_strategy_comparison(results)
 
 if __name__ == "__main__":
     main()
