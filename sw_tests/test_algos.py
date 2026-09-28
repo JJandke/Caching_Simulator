@@ -6,7 +6,7 @@ requests = ["A", "B", "C", "A", "D"]
 
 
 backend_fifo = SimulatedBackend(
-    "data/test.csv",
+    "../data/test.csv",
     request_delay=0,
 )
 
@@ -24,7 +24,7 @@ print("FIFO misses:", fifo.statistics.misses)
 
 
 backend_lru = SimulatedBackend(
-    "data/test.csv",
+    "../data/test.csv",
     request_delay=0,
 )
 
