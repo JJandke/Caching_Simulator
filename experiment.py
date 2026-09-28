@@ -400,6 +400,7 @@ def main():
     print(f"Result file: {RESULT_FILE}")
 
     print_summary(results)
+    print(print_strategy_comparison(results))
 
 
 if __name__ == "__main__":
