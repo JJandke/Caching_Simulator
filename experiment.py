@@ -70,6 +70,28 @@ def main():
 
     run_cache(lru, workload)
 
+
+    # Check if #hits + #misses = #requests to ensure proper functionality of the code.
+    assert (
+            fifo.statistics.hits + fifo.statistics.misses
+            == len(workload.requests)
+    )
+
+    assert (
+            lru.statistics.hits + lru.statistics.misses
+            == len(workload.requests)
+    )
+
+    assert (
+            fifo.statistics.misses
+            == fifo_backend.request_count
+    )
+
+    assert (
+            lru.statistics.misses
+            == lru_backend.request_count
+    )
+
     # ---------------------------------------------------------
     # Results
     # ---------------------------------------------------------
