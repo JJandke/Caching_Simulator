@@ -263,6 +263,18 @@ def main():
 
     assert len(results) == expected_runs
 
+    capacity_10_results = [
+        result
+        for result in results
+        if result["capacity"] == 10
+    ]
+
+    for result in capacity_10_results:
+        assert result["hits"] == 40
+        assert result["misses"] == 10
+        assert result["external_requests"] == 10
+        assert result["hit_rate"] == 0.8
+
     # ---------------------------------------------------------
     # Save and display results
     # ---------------------------------------------------------
