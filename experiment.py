@@ -13,6 +13,7 @@ from workload import WorkloadGenerator, WorkloadType
 
 DATASET = "data/network_elements.csv"
 RESULT_FILE = "results/cache_results.csv"
+SUMMARY_FILE = "results/cache_summary.csv"
 
 SEEDS = range(1, 11)
 CACHE_CAPACITIES = [3, 5, 7, 10]
@@ -113,6 +114,147 @@ def save_results(
 
         writer.writeheader()
         writer.writerows(results)
+
+def save_summary(
+    results: list[dict],
+    output_file: str,
+) -> None:
+    """
+    Calculates aggregated FIFO/LRU results for each workload type
+    and cache capacity and writes them to a CSV file.
+    """
+
+    output_path = Path(output_file)
+
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    summary_rows = []
+
+    for workload_type in WorkloadType:
+
+        for capacity in CACHE_CAPACITIES:
+
+            fifo_results = [
+                result
+                for result in results
+                if (
+                    result["workload_type"] == workload_type.value
+                    and result["capacity"] == capacity
+                    and result["strategy"] == FIFOCache.__name__
+                )
+            ]
+
+            lru_results = [
+                result
+                for result in results
+                if (
+                    result["workload_type"] == workload_type.value
+                    and result["capacity"] == capacity
+                    and result["strategy"] == LRUCache.__name__
+                )
+            ]
+
+            # Ensure that both strategies contain the same seeds.
+            fifo_by_seed = {
+                result["seed"]: result
+                for result in fifo_results
+            }
+
+            lru_by_seed = {
+                result["seed"]: result
+                for result in lru_results
+            }
+
+            assert fifo_by_seed.keys() == lru_by_seed.keys()
+
+            seeds = sorted(fifo_by_seed.keys())
+
+            fifo_hit_rates = [
+                fifo_by_seed[seed]["hit_rate"]
+                for seed in seeds
+            ]
+
+            lru_hit_rates = [
+                lru_by_seed[seed]["hit_rate"]
+                for seed in seeds
+            ]
+
+            differences = [
+                lru_by_seed[seed]["hit_rate"]
+                - fifo_by_seed[seed]["hit_rate"]
+                for seed in seeds
+            ]
+
+            summary_rows.append({
+                "workload_type": workload_type.value,
+                "capacity": capacity,
+
+                "fifo_mean_hit_rate": mean(fifo_hit_rates),
+                "fifo_sd_hit_rate": stdev(fifo_hit_rates),
+
+                "lru_mean_hit_rate": mean(lru_hit_rates),
+                "lru_sd_hit_rate": stdev(lru_hit_rates),
+
+                # Stored as percentage points.
+                "mean_difference_pp": mean(differences) * 100,
+
+                "lru_better_seeds": sum(
+                    difference > 0
+                    for difference in differences
+                ),
+
+                "equal_seeds": sum(
+                    difference == 0
+                    for difference in differences
+                ),
+
+                "fifo_better_seeds": sum(
+                    difference < 0
+                    for difference in differences
+                ),
+
+                "fifo_mean_external_requests": mean(
+                    result["external_requests"]
+                    for result in fifo_results
+                ),
+
+                "lru_mean_external_requests": mean(
+                    result["external_requests"]
+                    for result in lru_results
+                ),
+            })
+
+    fieldnames = [
+        "workload_type",
+        "capacity",
+        "fifo_mean_hit_rate",
+        "fifo_sd_hit_rate",
+        "lru_mean_hit_rate",
+        "lru_sd_hit_rate",
+        "mean_difference_pp",
+        "lru_better_seeds",
+        "equal_seeds",
+        "fifo_better_seeds",
+        "fifo_mean_external_requests",
+        "lru_mean_external_requests",
+    ]
+
+    with output_path.open(
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as file:
+
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fieldnames,
+        )
+
+        writer.writeheader()
+        writer.writerows(summary_rows)
 
 
 def print_summary(results: list[dict]) -> None:
@@ -392,12 +534,18 @@ def main():
         RESULT_FILE,
     )
 
+    save_summary(
+        results,
+        SUMMARY_FILE,
+    )
+
     print("=" * 78)
     print("Experiment completed")
     print("=" * 78)
 
-    print(f"Total runs:  {len(results)}")
-    print(f"Result file: {RESULT_FILE}")
+    print(f"Total runs:   {len(results)}")
+    print(f"Raw results:  {RESULT_FILE}")
+    print(f"Summary:      {SUMMARY_FILE}")
 
     print_summary(results)
     print(print_strategy_comparison(results))
