@@ -15,7 +15,7 @@ TIMING_MODE = "simulated_external"
 
 WORKLOADS = [
     ("stable_locality", "Stable locality"),
-    ("changing_locality", "Changing locality"),
+    ("changing_locality", "Temporal locality"),
 ]
 
 
@@ -163,7 +163,7 @@ def create_plot(rows: list[dict]) -> None:
         axes[1],
         rows,
         "changing_locality",
-        "Changing locality",
+        "Temporal locality",
     )
 
     axes[0].set_ylabel("Mean execution time [ms]")

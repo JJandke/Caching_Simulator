@@ -145,7 +145,7 @@ def create_plot(rows: list[dict]) -> None:
         axes[1],
         rows,
         "changing_locality",
-        "Changing locality",
+        "Temporal locality",
     )
 
     axes[0].set_ylabel("Mean cache hit rate [%]")
